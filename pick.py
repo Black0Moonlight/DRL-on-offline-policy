@@ -1,10 +1,8 @@
-import numpy as np
-import torch
 from torch.utils.tensorboard import SummaryWriter
 from envs.rl_pick_env import *
 from envs.rl_pick_env import RLPickEnv
 from algo.SAC import SACAgent
-from DRL_RobotArm.config import *
+from config import *
 
 np.set_printoptions(precision=3, suppress=True)  # 设定numpy打印精度
 np.random.seed(opt.random_seed)
@@ -48,8 +46,7 @@ def train_xyz(state_dim, action_dim, action_bound=1):
             a0 = Agent.select_action(s0)
             a0 = (a0 + np.random.normal(0, 0.2, size=action_dim))
             # 加入夹爪动作
-            a0 = np.append(a0, KEEP)
-            s1, r, done, is_success = env.step_xyz(a0)
+            s1, r, done, is_success = env.step_xyz(np.append(a0, KEEP))
             Agent.put(s0, a0, r, s1, 1 - done)
             s0 = s1
             total_r += r

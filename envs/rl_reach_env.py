@@ -108,9 +108,86 @@ class RLReachEnv(object):
         self.orientation = p.getQuaternionFromEuler(
             [0., -math.pi, math.pi / 2.])
 
-        self.reset()
+    def reset_xyz(self):
+        # 初始化计数器
+        self.step_counter = 0
+        # 运行结束标志
+        self.terminated = False
+        self.is_success = False
 
-    def reset(self):
+        p.resetSimulation()
+        # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
+
+        # 初始化重力
+        p.setGravity(0, 0, -10)
+
+        # 状态空间的限制空间可视化，以白线标识
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_low_obs, 0],
+            lineToXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_high_obs, 0],
+            lineToXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs, self.y_low_obs, 0],
+            lineToXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs, self.y_high_obs, 0],
+            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
+
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs],
+            lineToXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs],
+            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs],
+            lineToXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs],
+            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
+
+        # 载入平面
+        p.loadURDF(os.path.join(self.urdf_root_path, "plane.urdf"), basePosition=[0, 0, -0.65])
+        # 载入机械臂
+        self.kuka_id = p.loadURDF(os.path.join(self.urdf_root_path, "kuka_iiwa/model.urdf"), useFixedBase=True)
+        # 载入桌子
+        p.loadURDF(os.path.join(self.urdf_root_path, "table/table.urdf"), basePosition=[0.5, 0, -0.65])
+        # 载入物体
+        self.object_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
+        self.object_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
+        self.object_pos[2] = random.uniform(self.z_low_obs, self.z_high_obs)
+        # self.obj_pos[0] = (self.x_low_obs+self.x_high_obs) / 2
+        # self.obj_pos[1] = (self.y_low_obs+self.y_high_obs) / 2
+        # self.obj_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
+        ang = 3.14 * 0.5 + 3.1415925438 * random.random()
+        orn = p.getQuaternionFromEuler([0, 0, ang])
+        self.object_id = p.loadURDF("../models/cube_small_target_push.urdf",
+                                    basePosition=self.object_pos,
+                                    baseOrientation=orn,
+                                    useFixedBase=1)
+        # 关节角初始化
+        self.num_joints = p.getNumJoints(self.kuka_id)
+        for i in range(self.num_joints):
+            p.resetJointState(
+                bodyUniqueId=self.kuka_id,
+                jointIndex=i,
+                targetValue=self.init_joint_positions[i],
+            )
+        # 机器臂末端xyz
+        self.robot_grip_pos = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
+        p.stepSimulation()
+        # self.object_pos = p.getBasePositionAndOrientation(self.object_id)[0]
+
+        self.object_pos = np.array(
+            p.getBasePositionAndOrientation(self.object_id)[0]).astype(
+            np.float32)
+        # state：机械臂末端*3 物体位置*3 = 6
+        return np.concatenate((self.robot_grip_pos, self.object_pos))
+        # return np.hstack((np.array(self.robot_grip_pos).astype(np.float32), self.object_pos))
+
+    def reset_joint(self):
         # 初始化计数器
         self.step_counter = 0
         # 运行结束标志
