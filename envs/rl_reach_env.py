@@ -487,31 +487,30 @@ class RLReachEnv(object):
         p.disconnect()
 
 
-# if __name__ == '__main__':
-    # # 这一部分是做baseline，即让机械臂随机选择动作，看看能够得到的分数
-    # env = RLReachEnv(is_good_view=True, is_render=True)
-    # print('env={}'.format(env))
-    # print(env.observation_space.shape)
-    # print(env.action_space.shape)
-    # obs = env.reset()
-    # action = env.action_space.sample()
-    # obs, reward, done, info = env.step_xyz(action)
-    # print('obs={},reward={},done={}'.format(obs, reward, done))
-    #
-    # sum_reward = 0
-    # success_times = 0
-    # for i in range(100):
-    #     env.reset()
-    #     for j in range(1000):
-    #         action = env.action_space.sample()
-    #         obs, reward, done, info = env.step_xyz(action)
-    #         print('reward={},done={}'.format(reward, done))
-    #         sum_reward += reward
-    #         if reward == 1:
-    #             success_times += 1
-    #         if done:
-    #             break
-    #     # time.sleep(0.1)
-    # print()
-    # print('sum_reward={}'.format(sum_reward))
-    # print('success rate={}'.format(success_times / 50))
+if __name__ == '__main__':
+    # 这一部分是做baseline，即让机械臂随机选择动作，看看能够得到的分数
+    env = RLReachEnv(is_good_view=True, is_render=True)
+    print('env={}'.format(env))
+    print(env.observation_space.shape)
+    print(env.action_space.shape)
+    obs = env.reset_xyz()
+    action = env.action_space.sample()
+    obs, reward, done, info = env.step_xyz(action)
+    print('obs={},reward={},done={}'.format(obs, reward, done))
+
+    sum_reward = 0
+    success_times = 0
+    for i in range(100):
+        env.reset_xyz()
+        for j in range(1000):
+            action = env.action_space.sample()
+            obs, reward, done, info = env.step_xyz(action)
+            print('reward={},done={}'.format(reward, done))
+            sum_reward += reward
+            if reward == 1:
+                success_times += 1
+            if done:
+                break
+    print()
+    print('sum_reward={}'.format(sum_reward))
+    print('success rate={}'.format(success_times / 50))

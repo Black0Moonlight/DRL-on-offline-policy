@@ -9,7 +9,7 @@ np.random.seed(opt.random_seed)
 torch.manual_seed(opt.random_seed)
 
 # MODE = 'train'
-MODE = 'train_joint'
+# MODE = 'train_joint'
 # MODE = 'test'
 
 env = RLPickEnv(is_render=True, is_good_view=False)
@@ -25,11 +25,11 @@ def clearLogs():
         os.remove(os.path.join(log_path, i))
 
 
-def train_xyz(state_dim, action_dim, action_bound=1):
+def train_xyz(state_dim, action_dim):
     print("/************************* train xyz **************************/")
 
-    # action_bound = 0.3 + float(env.action_space.high[0])
-    writer = SummaryWriter(log_path)  # 展示部分数据
+    action_bound = float(env.action_space.high[0])
+    writer = SummaryWriter(log_path)
     Agent = SACAgent(state_dim, action_dim, action_bound=action_bound)
 
     last_total_r = 0
@@ -45,8 +45,7 @@ def train_xyz(state_dim, action_dim, action_bound=1):
                 break
             a0 = Agent.select_action(s0)
             a0 = (a0 + np.random.normal(0, 0.2, size=action_dim))
-            # 加入夹爪动作
-            s1, r, done, is_success = env.step_xyz(np.append(a0, KEEP))
+            s1, r, done, is_success = env.step_xyz(a0)
             Agent.put(s0, a0, r, s1, 1 - done)
             s0 = s1
             total_r += r
@@ -73,22 +72,22 @@ def train_xyz(state_dim, action_dim, action_bound=1):
 
 
 if __name__ == '__main__':
-    if MODE == 'test':
-        Agent = SACAgent(9, 3, action_bound=1)
-        net_num = 31
-        if net_num > 0:
-            print('/***************** Load Pretrain NO.{} network ******************/'.format(net_num))
-            Agent.load_net(net_num)
-        for i in range(5):
-            s0 = env.reset()
-            time.sleep(0.3)
-            for i in range(opt.max_steps_one_episode):
-                a0 = Agent.select_action(s0)
-                s1, r, done, is_success = env.step_xyz(a0)
-                s0 = s1
-                time.sleep(0.01)
-            time.sleep(0.3)
-    else:
-        train_xyz(state_dim=9, action_dim=3)
+    # if MODE == 'test':
+    #     Agent = SACAgent(9, 3, action_bound=1)
+    #     net_num = 31
+    #     if net_num > 0:
+    #         print('/***************** Load Pretrain NO.{} network ******************/'.format(net_num))
+    #         Agent.load_net(net_num)
+    #     for i in range(5):
+    #         s0 = env.reset()
+    #         time.sleep(0.3)
+    #         for i in range(opt.max_steps_one_episode):
+    #             a0 = Agent.select_action(s0)
+    #             s1, r, done, is_success = env.step_xyz(a0)
+    #             s0 = s1
+    #             time.sleep(0.01)
+    #         time.sleep(0.3)
+    # else:
+    train_xyz(state_dim=9, action_dim=3)
     print("/***************************** End ****************************/")
 

@@ -22,7 +22,7 @@ class DefaultConfig(object):
     vis_port = 8097      # visdom port
 
     # reach env parameter
-    reach_ctr = 0.1     # to control the robot arm moving rate every step
+    reach_ctr = 0.01     # to control the robot arm moving rate every step
     reach_dis = 0.02     # to control the target distance
 
     # train parameter
@@ -30,7 +30,6 @@ class DefaultConfig(object):
     device = torch.device('cuda') if use_gpu else torch.device('cpu')
     random_seed = 0
     max_episodes = 5000   # number of training episodes
-    # max_steps_one_episode = 500  # Maximum number of simulation steps per round
     max_steps_one_episode = 500  # Maximum number of simulation steps per round
 
     # net parameter

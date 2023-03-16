@@ -2,18 +2,13 @@ import numpy as np
 import pybullet as p
 import pybullet_data
 import os
-import gym
 from gym import spaces
-from gym.utils import seeding
 import random
 import time
-
 import math
 from config import *
 
-
 class RLPickEnv(object):
-    """创建强化学习机械臂reach任务仿真环境"""
     metadata = {
         'render.modes': ['human', 'rgb_array'],
         'video.frames_per_second': 60
@@ -47,6 +42,7 @@ class RLPickEnv(object):
         self.object_id = None
         self.target_object_id = None
 
+        self.catchFlag = None
         self.terminated = None
         self.is_success = None
 
@@ -101,14 +97,6 @@ class RLPickEnv(object):
         self.step_counter = 0
 
         self.urdf_root_path = pybullet_data.getDataPath()
-        # lower limits for null space
-        self.lower_limits = [-.967, -2, -2.96, 0.19, -2.96, -2.09, -3.05]
-        # upper limits for null space
-        self.upper_limits = [.967, 2, 2.96, 2.29, 2.96, 2.09, 3.05]
-        # joint ranges for null space
-        self.joint_ranges = [5.8, 4, 5.8, 4, 5.8, 4, 6]
-        # restposes for null space
-        self.rest_poses = [0, 0, 0, 0.5 * math.pi, 0, -math.pi * 0.5 * 0.66, 0]
         # joint damping coefficents
         self.joint_damping = [
             0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001, 0.00001,
@@ -117,10 +105,8 @@ class RLPickEnv(object):
 
         # 初始关节角度
         self.init_joint_positions = [
-            0.006418, 0.413184, -0.011401, -1.589317, 0.005379, 1.137684,
-            -0.006539,
-            0.000048, -0.299912, 0.000000, -0.000043, 0.299960,
-            0.000000, -0.000200
+            0.006418, 0.413184, -0.011401, -1.589317, 0.005379, 1.137684, -0.006539,
+            0.000048, -0.299912, 0.000000, -0.000043, 0.299960, 0.000000, -0.000200
         ]
 
         self.orientation = p.getQuaternionFromEuler(
@@ -139,7 +125,7 @@ class RLPickEnv(object):
         # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
 
         # 初始化重力
-        p.setGravity(0, 0, -10)
+        p.setGravity(0, 0, -9.8)
 
         # 状态空间的限制空间可视化，以白线标识
         p.addUserDebugLine(
@@ -203,11 +189,11 @@ class RLPickEnv(object):
         orn_target = p.getQuaternionFromEuler([0, 0, ang_target])
 
         # 载入物体
-        self.object_id = p.loadURDF("../models/cube_small_push.urdf",
+        self.object_id = p.loadURDF("../models/cube_small_pick.urdf",
                                     basePosition=self.object_pos,
                                     baseOrientation=orn)
         # 载入目标物体
-        self.target_object_id = p.loadURDF("../models/cube_small_target_push.urdf",
+        self.target_object_id = p.loadURDF("../models/cube_small_target_pick.urdf",
                                     basePosition=self.target_pos,
                                     baseOrientation=orn_target,
                                     useFixedBase=1)
@@ -233,16 +219,13 @@ class RLPickEnv(object):
         # logging.debug("init_pos={}\n".format(p.getLinkState(self.kuka_id,self.num_joints-1)))
         p.stepSimulation()
 
-        state = self._get_obs()
-        self.last_object_pos = state[3:6]
-        self.last_target_pos = state[-3:]
+        state = np.hstack((self.robot_grip_pos, self.object_pos, self.target_pos))
 
         return state
 
-    def _get_obs(self):
+    def get_state(self):
         # 机器臂末端
-        robot_end_effector_position = list(p.getLinkState(self.kuka_id, self.end_effector_index)[4])
-        robot_obs = p.getLinkState(self.kuka_id, self.num_joints - 1, computeLinkVelocity=1)
+        robot_obs = p.getLinkState(self.kuka_id, self.end_effector_index, computeLinkVelocity=1)
         robotPos = np.array(robot_obs[4])
         robotOrn_temp = np.array(robot_obs[5])
         robot_linear_Velocity = np.array(robot_obs[6])
@@ -272,7 +255,11 @@ class RLPickEnv(object):
         # 相对位置
         relative_pos = blockPos - robotPos
 
-        return np.hstack((np.array(robot_end_effector_position).astype(np.float32), blockPos, targetPos))  # 9
+        self.robot_grip_pos = robotPos
+        self.object_pos = blockPos
+        self.target_pos = targetPos
+
+        return robotPos, blockPos, targetPos
 
     def step_xyz(self, action):  # 控制夹爪的x,y,z以及夹爪的yaw值
         limit_x = [0.2, 0.7]
@@ -312,35 +299,24 @@ class RLPickEnv(object):
                 jointIndex=i,
                 targetValue=self.robot_joint_pos[i],
             )
-        self.grip(action[3])
+
+        # 获取当前的观测
+        self.get_state()
+        # 计算物体与目标物体间的距离是否发生改变
+        self.distance_object = np.linalg.norm(self.robot_grip_pos - self.object_pos, axis=-1)
+        self.distance_target = np.linalg.norm(self.object_pos - self.target_pos, axis=-1)
+
+        if self.distance_object < opt.reach_dis:
+            if self.catchFlag == 0:
+                self.catchFlag = 1
+                self.grip(CLOSE)
+
         p.stepSimulation()
 
         return self.reward()
 
     def reward(self):
-        # 获取机械臂当前的末端坐标
-        # 一定注意是取第4个值，请参考pybullet手册的这个函数返回值的说明
-        robot_grip_pos = np.array(p.getLinkState(self.kuka_id, self.end_effector_index)[4]).astype(np.float32)
-        # 转换为夹爪末端位置 //Q 直接转化？？
-        robot_grip_pos[2] -= self.gripper_length
-        # 获取物体当前的位置坐标
-        self.object_pos = np.array(
-            p.getBasePositionAndOrientation(self.object_id)[0]).astype(
-                np.float32)
-        # 获取目标物体当前的位置坐标
-        self.target_pos = np.array(
-            p.getBasePositionAndOrientation(self.target_object_id)[0]).astype(
-            np.float32)
-        # 获取当前的观测
-        obs = self._get_obs()
-
-        # 计算物体与目标物体间的距离是否发生改变
-        self.object_pos = obs[3:6]
-        self.target_pos = obs[-3:]
-
         # r1 用机械臂末端和物体的距离作为奖励函数的依据
-        self.distance_object = np.linalg.norm(self.robot_grip_pos - self.object_pos, axis=-1)
-        self.distance_target = np.linalg.norm(self.object_pos - self.target_pos, axis=-1)
         self.distance_new = self.distance_object + self.distance_target
         r = -self.distance_new * 1.0
 
@@ -363,7 +339,8 @@ class RLPickEnv(object):
         # r4 如果机械比末端超过了obs的空间，也视为done，给予一定的惩罚
         x = self.robot_grip_pos[0]
         y = self.robot_grip_pos[1]
-        z = self.robot_grip_pos[2]
+        # 转换为夹爪末端位置 //Q 直接转化？？
+        z = self.robot_grip_pos[2] - self.gripper_length
         terminated = bool(x < self.x_low_obs or x > self.x_high_obs
                           or y < self.y_low_obs or y > self.y_high_obs
                           or z < self.z_low_obs or z > self.z_high_obs)
@@ -386,26 +363,34 @@ class RLPickEnv(object):
         if self.is_good_view:
             time.sleep(0.05)
 
-        return obs, r, self.terminated, self.is_success
+        state = np.hstack((self.robot_grip_pos, self.object_pos, self.target_pos))
+
+        return state, r, self.terminated, self.is_success
 
     def grip(self, catch=0):
         if catch == OPEN:
-            for i in range(20):
-                self.grip_joint_pos[0] += 0.01
-                self.grip_joint_pos[1] -= 0.01
+            for i in range(22):
+                self.grip_joint_pos[0] -= 0.01
+                self.grip_joint_pos[1] += 0.01
+                p.resetJointState(self.kuka_id, 7, 0)
                 p.resetJointState(self.kuka_id, 8, self.grip_joint_pos[0])
+                p.resetJointState(self.kuka_id, 9, 0)
                 p.resetJointState(self.kuka_id, 10, 0)
                 p.resetJointState(self.kuka_id, 11, self.grip_joint_pos[1])
+                p.resetJointState(self.kuka_id, 12, 0)
                 p.resetJointState(self.kuka_id, 13, 0)
                 p.stepSimulation()
                 time.sleep(0.1)
         elif catch == CLOSE:
-            for i in range(20):
-                self.grip_joint_pos[0] -= 0.01
-                self.grip_joint_pos[1] += 0.01
+            for i in range(22):
+                self.grip_joint_pos[0] += 0.01
+                self.grip_joint_pos[1] -= 0.01
+                p.resetJointState(self.kuka_id, 7, 0)
                 p.resetJointState(self.kuka_id, 8, self.grip_joint_pos[0])
+                p.resetJointState(self.kuka_id, 9, 0)
                 p.resetJointState(self.kuka_id, 10, 0)
                 p.resetJointState(self.kuka_id, 11, self.grip_joint_pos[1])
+                p.resetJointState(self.kuka_id, 12, 0)
                 p.resetJointState(self.kuka_id, 13, 0)
                 p.stepSimulation()
                 time.sleep(0.1)
@@ -422,11 +407,13 @@ if __name__ == '__main__':
     print(env.action_space.shape)
 
     # 测试夹爪
-    action = [0, 0, 0, 1]
-    obs, reward, done, info = env.step_xyz(action)
+    action = [0, 0, 0, 0]
+    env.step_xyz(action)
     time.sleep(1)
-    action = [0, 0, 0, -1]
-    obs, reward, done, info = env.step_xyz(action)
+    env.grip(CLOSE)
+    time.sleep(1)
+    env.grip(OPEN)
+    time.sleep(1)
 
     sum_reward = 0
     success_times = 0
