@@ -24,6 +24,7 @@ class DefaultConfig(object):
     # reach env parameter
     reach_ctr = 0.01     # to control the robot arm moving rate every step
     reach_dis = 0.02     # to control the target distance
+    pick_dis = 0.02
 
     # train parameter
     use_gpu = True       # user GPU or not
@@ -31,6 +32,7 @@ class DefaultConfig(object):
     random_seed = 0
     max_episodes = 5000   # number of training episodes
     max_steps_one_episode = 500  # Maximum number of simulation steps per round
+    max_steps_pick = 1000  # Maximum number of simulation steps per round
 
     # net parameter
     actor_lr = 0.001      # actor net learning rate

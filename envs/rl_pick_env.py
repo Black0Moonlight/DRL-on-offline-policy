@@ -27,6 +27,11 @@ class RLPickEnv(object):
     object_pos = [0, 0, 0]  # 物体坐标
     target_pos = [0, 0, 0]  # 目标位置坐标
 
+    robot_grip_orn = [0, 0, 0]  # 机械臂末端坐标
+    object_orn = [0, 0, 0]  # 物体坐标
+    target_orn = [0, 0, 0]  # 目标位置坐标
+    orn_error = 0
+
     last_object_pos = 0.0
     last_target_pos = 0.0
     current_object_pos = 0.0
@@ -38,13 +43,14 @@ class RLPickEnv(object):
             is_good_view (bool):    是否创建更优视角
         """
 
+        self.sphere_id = None
         self.kuka_id = None
         self.object_id = None
         self.target_object_id = None
 
-        self.catchFlag = None
-        self.terminated = None
-        self.is_success = None
+        self.catchFlag = False
+        self.terminated = False
+        self.is_success = False
 
         self.is_render = is_render
         self.is_good_view = is_good_view
@@ -117,9 +123,12 @@ class RLPickEnv(object):
     def reset(self):
         # 初始化时间步计数器
         self.step_counter = 0
-        # 运行结束标志
+        # 重置运行结束标志
+        self.catchFlag = False
         self.terminated = False
         self.is_success = False
+
+        self.grip_joint_pos = [-0.3, 0.3]
 
         p.resetSimulation()
         # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
@@ -158,6 +167,12 @@ class RLPickEnv(object):
         p.loadURDF(os.path.join(self.urdf_root_path, "plane.urdf"), basePosition=[0, 0, -0.65])
         # 载入机械臂 带夹爪
         self.kuka_id = p.loadSDF(os.path.join(self.urdf_root_path, "kuka_iiwa/kuka_with_gripper2.sdf"))[0]
+        for i in range(self.num_joints):
+            p.enableJointForceTorqueSensor(bodyUniqueId=self.kuka_id, jointIndex=i, enableSensor=1)
+            # p.changeDynamics(bodyUniqueId=self.kuka_id,
+            #                  linkIndex=i,
+            #                  contactStiffness=10000,
+            #                  contactDamping=0.8,)
         # 载入桌子
         table_uid = p.loadURDF(os.path.join(self.urdf_root_path, "table/table.urdf"), basePosition=[0.5, 0, -0.65])
         p.changeVisualShape(table_uid, -1, rgbaColor=[1, 1, 1, 1])
@@ -176,6 +191,9 @@ class RLPickEnv(object):
             self.target_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
             self.target_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
             self.target_pos[2] = random.uniform(self.z_low_obs, self.z_high_obs)  # TODO 原z=0.01
+            self.target_pos[0] = (self.x_low_obs+self.x_high_obs) / 2 + 0.15
+            self.target_pos[1] = (self.y_low_obs+self.y_high_obs) / 2 - 0.15
+            self.target_pos[2] = 0.01
 
             # 确保距离在一定范围内
             self.dis_between_target_block = np.linalg.norm((np.array(self.object_pos) - np.array(self.target_pos)), axis=-1)
@@ -185,13 +203,25 @@ class RLPickEnv(object):
         ang = 3.14 * 0.5 + 3.1415925438 * random.random()
         ang = 0
         orn = p.getQuaternionFromEuler([0, 0, ang])
+
         ang_target = 3.14 * 0.5 + 3.1415925438 * random.random()
+        ang_target = 0
         orn_target = p.getQuaternionFromEuler([0, 0, ang_target])
 
         # 载入物体
         self.object_id = p.loadURDF("../models/cube_small_pick.urdf",
                                     basePosition=self.object_pos,
                                     baseOrientation=orn)
+        p.changeDynamics(bodyUniqueId=self.object_id,
+                         linkIndex=-1,
+                         contactStiffness=1e5,
+                         contactDamping=0.3,)
+        # 获取当前机械臂末端坐标
+        self.robot_grip_pos = np.array(p.getLinkState(self.kuka_id, self.end_effector_index)[4]).astype(np.float32)
+        self.sphere_id = p.loadURDF("../models/sphere.urdf",
+                                 basePosition=[self.robot_grip_pos[0], self.robot_grip_pos[1],
+                                               self.robot_grip_pos[2] - self.gripper_length],
+                                 useFixedBase=1)
         # 载入目标物体
         self.target_object_id = p.loadURDF("../models/cube_small_target_pick.urdf",
                                     basePosition=self.target_pos,
@@ -199,6 +229,8 @@ class RLPickEnv(object):
                                     useFixedBase=1)
         # 避免碰撞检测
         p.setCollisionFilterPair(self.target_object_id, self.object_id, -1, -1, 0)
+        p.setCollisionFilterPair(self.sphere_id, self.object_id, -1, -1, 0)
+        p.setCollisionFilterPair(self.target_object_id, self.sphere_id, -1, -1, 0)
 
         # 关节角初始化
         self.num_joints = p.getNumJoints(self.kuka_id)
@@ -219,7 +251,10 @@ class RLPickEnv(object):
         # logging.debug("init_pos={}\n".format(p.getLinkState(self.kuka_id,self.num_joints-1)))
         p.stepSimulation()
 
-        state = np.hstack((self.robot_grip_pos, self.object_pos, self.target_pos))
+        # state = np.hstack((self.robot_grip_pos, self.object_pos, self.target_pos))
+        state = np.hstack((self.robot_grip_pos, self.robot_grip_orn[2],
+                           self.object_pos, self.object_orn[2],
+                           self.target_pos))
 
         return state
 
@@ -259,7 +294,11 @@ class RLPickEnv(object):
         self.object_pos = blockPos
         self.target_pos = targetPos
 
-        return robotPos, blockPos, targetPos
+        self.robot_grip_orn = robotOrn
+        self.object_orn = blockOrn
+        self.target_orn = targetOrn
+
+        return robotPos, robotOrn, blockPos, blockOrn, targetPos
 
     def step_xyz(self, action):  # 控制夹爪的x,y,z以及夹爪的yaw值
         limit_x = [0.2, 0.7]
@@ -276,6 +315,7 @@ class RLPickEnv(object):
         dx = action[0] * dv
         dy = action[1] * dv
         dz = action[2] * dv
+        dyaw = action[3] * dv
 
         # 获取当前机械臂末端坐标
         self.robot_grip_pos = np.array(p.getLinkState(self.kuka_id, self.end_effector_index)[4]).astype(np.float32)
@@ -284,12 +324,13 @@ class RLPickEnv(object):
             clip_val(self.robot_grip_pos[0] + dx, limit_x), clip_val(self.robot_grip_pos[1] + dy, limit_y),
             clip_val(self.robot_grip_pos[2] + dz, limit_z)
         ]
+        self.robot_grip_orn[2] = self.robot_grip_orn[2] + dyaw
         # 通过逆运动学计算机械臂移动到新位置的关节角度
         self.robot_joint_pos = np.array(p.calculateInverseKinematics(
             bodyUniqueId=self.kuka_id,
             endEffectorLinkIndex=self.end_effector_index,
             targetPosition=self.robot_grip_pos,
-            targetOrientation=self.orientation,
+            targetOrientation=self.orientation,  # p.getQuaternionFromEuler([0., -math.pi, self.robot_grip_orn[2]])
             jointDamping=self.joint_damping,
         ))
         # 使机械臂移动到新位置
@@ -299,17 +340,42 @@ class RLPickEnv(object):
                 jointIndex=i,
                 targetValue=self.robot_joint_pos[i],
             )
-
+        p.resetJointState(self.kuka_id, self.end_effector_index, self.robot_grip_orn[2])
+        p.resetBasePositionAndOrientation(bodyUniqueId=self.sphere_id,
+                                          posObj=[self.robot_grip_pos[0],
+                                                  self.robot_grip_pos[1],
+                                                  self.robot_grip_pos[2] - self.gripper_length],
+                                          ornObj=self.orientation)
         # 获取当前的观测
         self.get_state()
         # 计算物体与目标物体间的距离是否发生改变
-        self.distance_object = np.linalg.norm(self.robot_grip_pos - self.object_pos, axis=-1)
+        x = self.robot_grip_pos[0]
+        y = self.robot_grip_pos[1]
+        # 转换为夹爪末端位置
+        z = self.robot_grip_pos[2] - self.gripper_length
+        self.distance_object = np.linalg.norm([x, y, z] - self.object_pos, axis=-1)
+        self.orn_error = np.abs(self.object_orn[2] - self.robot_grip_orn[2])
         self.distance_target = np.linalg.norm(self.object_pos - self.target_pos, axis=-1)
 
-        if self.distance_object < opt.reach_dis:
+        if self.distance_object < opt.pick_dis:  #  + self.orn_error * 0.1
+            print(self.distance_object)
             if self.catchFlag == 0:
+                # np.abs(self.robot_grip_orn[2]-self.object_orn[2]) < opt.pick_dis and
                 self.catchFlag = 1
+                time.sleep(1)
+                print("/*********************** Catch ***********************/")
                 self.grip(CLOSE)
+            else:
+                self.grip(KEEP)
+        else:
+            # if self.catchFlag == 1:
+            #     # np.abs(self.robot_grip_orn[2]-self.object_orn[2]) < opt.pick_dis and
+            #     self.catchFlag = 0
+            #     time.sleep(1)
+            #     print("/*********************** Catch ***********************/")
+            #     self.grip(OPEN)
+            # else:
+            self.grip(KEEP)
 
         p.stepSimulation()
 
@@ -318,7 +384,11 @@ class RLPickEnv(object):
     def reward(self):
         # r1 用机械臂末端和物体的距离作为奖励函数的依据
         self.distance_new = self.distance_object + self.distance_target
-        r = -self.distance_new * 1.0
+        r = -self.distance_new * 2.0
+
+        # r1 用机械臂末端和物体的角度
+        r -= self.orn_error * 0.2
+        # print(self.distance_new)
 
         # r2 如果运动趋势正确，提高奖励
         if self.distance_new < self.distance_old:
@@ -331,10 +401,6 @@ class RLPickEnv(object):
             r += -20
             self.terminated = True
             self.is_success = False
-        elif self.distance_new < opt.reach_dis:
-            r += 10
-            self.terminated = True
-            self.is_success = True
 
         # r4 如果机械比末端超过了obs的空间，也视为done，给予一定的惩罚
         x = self.robot_grip_pos[0]
@@ -348,6 +414,14 @@ class RLPickEnv(object):
             r += -0.05
             # self.terminated = True
             # self.is_success = False
+
+        # r5 抓取奖励
+        if self.distance_new < opt.reach_dis:
+            r += 10
+        if self.distance_target < opt.pick_dis:
+            r += 20
+            self.terminated = True
+            self.is_success = True
 
         # if p.getClosestPoints(self.kuka_id, self.object_id, 0.006):
         #     p.resetJointState(self.kuka_id, 8, 0)
@@ -363,13 +437,15 @@ class RLPickEnv(object):
         if self.is_good_view:
             time.sleep(0.05)
 
-        state = np.hstack((self.robot_grip_pos, self.object_pos, self.target_pos))
-
+        # state = np.hstack((self.robot_grip_pos, self.object_pos, self.target_pos))
+        state = np.hstack((self.robot_grip_pos, self.robot_grip_orn[2],
+                           self.object_pos, self.object_orn[2],
+                           self.target_pos))
         return state, r, self.terminated, self.is_success
 
     def grip(self, catch=0):
         if catch == OPEN:
-            for i in range(22):
+            for i in range(25):
                 self.grip_joint_pos[0] -= 0.01
                 self.grip_joint_pos[1] += 0.01
                 p.resetJointState(self.kuka_id, 7, 0)
@@ -382,7 +458,7 @@ class RLPickEnv(object):
                 p.stepSimulation()
                 time.sleep(0.1)
         elif catch == CLOSE:
-            for i in range(22):
+            for i in range(25):
                 self.grip_joint_pos[0] += 0.01
                 self.grip_joint_pos[1] -= 0.01
                 p.resetJointState(self.kuka_id, 7, 0)
@@ -394,6 +470,19 @@ class RLPickEnv(object):
                 p.resetJointState(self.kuka_id, 13, 0)
                 p.stepSimulation()
                 time.sleep(0.1)
+        else:
+            p.resetJointState(self.kuka_id, 7, 0)
+            p.resetJointState(self.kuka_id, 8, self.grip_joint_pos[0])
+            p.resetJointState(self.kuka_id, 9, 0)
+            p.resetJointState(self.kuka_id, 10, 0)
+            p.resetJointState(self.kuka_id, 11, self.grip_joint_pos[1])
+            p.resetJointState(self.kuka_id, 12, 0)
+            p.resetJointState(self.kuka_id, 13, 0)
+            p.stepSimulation()
+
+    def test_grip(self, angle):
+        p.resetJointState(self.kuka_id, self.end_effector_index, angle)
+        p.stepSimulation()
 
     def close(self):
         p.disconnect()
@@ -413,6 +502,14 @@ if __name__ == '__main__':
     env.grip(CLOSE)
     time.sleep(1)
     env.grip(OPEN)
+    time.sleep(1)
+    for i in range(100):
+        env.test_grip(i/(25*np.pi))
+        time.sleep(0.1)
+    time.sleep(1)
+    for i in range(100):
+        env.test_grip((100-i)/(25*np.pi))
+        time.sleep(0.1)
     time.sleep(1)
 
     sum_reward = 0

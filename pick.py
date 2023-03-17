@@ -40,7 +40,7 @@ def train_xyz(state_dim, action_dim):
         total_r = 0
         done = 0
         loss = 0
-        for i in range(opt.max_steps_one_episode):
+        for i in range(opt.max_steps_pick):
             if done:
                 break
             a0 = Agent.select_action(s0)
@@ -50,14 +50,16 @@ def train_xyz(state_dim, action_dim):
             s0 = s1
             total_r += r
             # time.sleep(0.1)
-            if i > 1 and i % 50 == 0:
-                t1 = time.perf_counter()
-                dt = t1 - t0
-                t0 = t1
-                print('Episode {} Step {} dt:{:.1f}s Reward:{} loss:{}'
-                      .format(episode, i, dt, r, loss))
+            s1[2] -= env.gripper_length
+            distance_object = np.linalg.norm(s1[0:3] - s1[6:9], axis=-1)
             if Agent.replay_buffer.__len__() > Agent.batch_size:
                 loss = Agent.update()
+            # if i > 1 and i % 50 == 0:
+            #     t1 = time.perf_counter()
+            #     dt = t1 - t0
+            #     t0 = t1
+            #     print('Episode {} Step {} dt:{:.1f}s Reward:{:.5f} loss:{:.5f} dist:{:.5f}'
+            #           .format(episode, i, dt, r, loss, distance_object))
         writer.add_scalar('Reward', total_r, episode)
         print("/*********************** Episode {} End ***********************/".format(episode))
         print('Total time:{}s Total Reward:{} dr:{}'
@@ -88,6 +90,6 @@ if __name__ == '__main__':
     #             time.sleep(0.01)
     #         time.sleep(0.3)
     # else:
-    train_xyz(state_dim=9, action_dim=3)
+    train_xyz(state_dim=11, action_dim=4)
     print("/***************************** End ****************************/")
 
