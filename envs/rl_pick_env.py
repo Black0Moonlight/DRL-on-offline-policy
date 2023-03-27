@@ -214,8 +214,16 @@ class RLPickEnv(object):
                                     baseOrientation=orn)
         p.changeDynamics(bodyUniqueId=self.object_id,
                          linkIndex=-1,
-                         contactStiffness=1e5,
-                         contactDamping=0.3,)
+                         contactStiffness=10000.0,
+                         contactDamping=0.1)
+        # Set the debug color of the block to red
+        p.setDebugObjectColor(self.object_id, -1, objectDebugColorRGB=[1, 0, 0])
+        # enable the debug visualization
+        p.configureDebugVisualizer(p.COV_ENABLE_GUI, 1)
+        p.configureDebugVisualizer(p.COV_ENABLE_RGB_BUFFER_PREVIEW, 1)
+        p.configureDebugVisualizer(p.COV_ENABLE_DEPTH_BUFFER_PREVIEW, 1)
+        p.configureDebugVisualizer(p.COV_ENABLE_SEGMENTATION_MARK_PREVIEW, 1)
+
         # 获取当前机械臂末端坐标
         self.robot_grip_pos = np.array(p.getLinkState(self.kuka_id, self.end_effector_index)[4]).astype(np.float32)
         self.sphere_id = p.loadURDF("../models/sphere.urdf",
