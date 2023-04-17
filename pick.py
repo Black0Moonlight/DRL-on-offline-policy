@@ -40,6 +40,7 @@ def train_xyz(state_dim, action_dim):
         total_r = 0
         done = 0
         loss = 0
+        i = 0
         for i in range(opt.max_steps_pick):
             if done:
                 break

@@ -93,8 +93,8 @@ class DDPGAgent(object):
         return a
 
     def update(self):
-        samples = self.replay_buffer.on_sample(self.batch_size)
-        # samples = self.buffer.sample(self.batch_size)
+        # samples = self.replay_buffer.on_sample(self.batch_size)
+        samples = self.replay_buffer.sample(self.batch_size)
         batch = Transition(*zip(*samples))
 
         state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)
@@ -143,6 +143,11 @@ class DDPGAgent(object):
         torch.save(self.critic.state_dict(), 'dataBase/saveNet/' + str(num) + '_critic_net.pkl')
         torch.save(self.actor_target.state_dict(), 'dataBase/saveNet/' + str(num) + '_actor_target_net.pkl')
         torch.save(self.critic_target.state_dict(), 'dataBase/saveNet/' + str(num) + '_critic_target_net.pkl')
+
+        torch.save(self.actor.state_dict(), 'dataBase/loadNet/' + str(num) + '_actor_net.pkl')
+        torch.save(self.critic.state_dict(), 'dataBase/loadNet/' + str(num) + '_critic_net.pkl')
+        torch.save(self.actor_target.state_dict(), 'dataBase/loadNet/' + str(num) + '_actor_target_net.pkl')
+        torch.save(self.critic_target.state_dict(), 'dataBase/loadNet/' + str(num) + '_critic_target_net.pkl')
 
     def load_net(self, num):
         self.actor.load_state_dict(torch.load('dataBase/loadNet/' + str(num) + '_actor_net.pkl'))

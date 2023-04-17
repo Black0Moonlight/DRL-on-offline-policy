@@ -31,11 +31,11 @@ class RLReachEnv(object):
             is_good_view (bool):    是否创建更优视角
         """
 
-        self.kuka_id = None
-        self.object_id = None
+        self.kuka_id = 0
+        self.object_id = 0
 
-        self.terminated = None
-        self.is_success = None
+        self.terminated = 0
+        self.is_success = 0
 
         self.is_render = is_render
         self.is_good_view = is_good_view
@@ -107,6 +107,56 @@ class RLReachEnv(object):
 
         self.orientation = p.getQuaternionFromEuler(
             [0., -math.pi, math.pi / 2.])
+
+        p.resetSimulation()
+        # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
+
+        # 初始化重力
+        p.setGravity(0, 0, -10)
+
+        # 状态空间的限制空间可视化，以白线标识
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_low_obs, 0],
+            lineToXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_high_obs, 0],
+            lineToXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs, self.y_low_obs, 0],
+            lineToXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs, self.y_high_obs, 0],
+            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
+
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs],
+            lineToXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs],
+            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs],
+            lineToXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs])
+        p.addUserDebugLine(
+            lineFromXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs],
+            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
+
+        # 载入平面
+        p.loadURDF(os.path.join(self.urdf_root_path, "plane.urdf"), basePosition=[0, 0, -0.65])
+        # 载入机械臂
+        self.kuka_id = p.loadURDF(os.path.join(self.urdf_root_path, "kuka_iiwa/model.urdf"), useFixedBase=True)
+        # 载入桌子
+        p.loadURDF(os.path.join(self.urdf_root_path, "table/table.urdf"), basePosition=[0.5, 0, -0.65])
+
+        self.object_pos[0] = (self.x_low_obs+self.x_high_obs) / 2
+        self.object_pos[1] = (self.y_low_obs+self.y_high_obs) / 2
+        self.object_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
+        ang = 3.14 * 0.5 + 3.1415925438 * random.random()
+        orn = p.getQuaternionFromEuler([0, 0, ang])
+        self.object_id = p.loadURDF("../models/cube_small_target_push.urdf",
+                                    basePosition=self.object_pos,
+                                    baseOrientation=orn,
+                                    useFixedBase=1)
 
     def reset_xyz(self):
         # 初始化计数器
@@ -194,45 +244,6 @@ class RLReachEnv(object):
         self.terminated = False
         self.is_success = False
 
-        p.resetSimulation()
-        # p.configureDebugVisualizer(p.COV_ENABLE_RENDERING, 0)
-
-        # 初始化重力
-        p.setGravity(0, 0, -10)
-
-        # 状态空间的限制空间可视化，以白线标识
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs, self.y_low_obs, 0],
-            lineToXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs, self.y_high_obs, 0],
-            lineToXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_high_obs, self.y_low_obs, 0],
-            lineToXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_high_obs, self.y_high_obs, 0],
-            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
-
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs],
-            lineToXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs],
-            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_low_obs, self.y_low_obs, self.z_high_obs],
-            lineToXYZ=[self.x_low_obs, self.y_high_obs, self.z_high_obs])
-        p.addUserDebugLine(
-            lineFromXYZ=[self.x_high_obs, self.y_low_obs, self.z_high_obs],
-            lineToXYZ=[self.x_high_obs, self.y_high_obs, self.z_high_obs])
-
-        # 载入平面
-        p.loadURDF(os.path.join(self.urdf_root_path, "plane.urdf"), basePosition=[0, 0, -0.65])
-        # 载入机械臂
-        self.kuka_id = p.loadURDF(os.path.join(self.urdf_root_path, "kuka_iiwa/model.urdf"), useFixedBase=True)
-        # 载入桌子
-        p.loadURDF(os.path.join(self.urdf_root_path, "table/table.urdf"), basePosition=[0.5, 0, -0.65])
         # 载入物体
         self.object_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
         self.object_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
@@ -242,10 +253,12 @@ class RLReachEnv(object):
         # self.obj_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
         ang = 3.14 * 0.5 + 3.1415925438 * random.random()
         orn = p.getQuaternionFromEuler([0, 0, ang])
-        self.object_id = p.loadURDF("../models/cube_small_target_push.urdf",
-                                    basePosition=self.object_pos,
-                                    baseOrientation=orn,
-                                    useFixedBase=1)
+        p.stepSimulation()
+        # self.object_id = p.loadURDF("../models/cube_small_target_push.urdf",
+        #                             basePosition=self.object_pos,
+        #                             baseOrientation=orn,
+        #                             useFixedBase=1)
+        p.resetBasePositionAndOrientation(self.object_id, self.object_pos, orn)
         # 关节角初始化
         self.num_joints = p.getNumJoints(self.kuka_id)
         for i in range(self.num_joints):
@@ -299,13 +312,15 @@ class RLReachEnv(object):
         elif self.distance_new > self.distance_old:
             r -= 0.5
 
+        self.step_counter += 1
         # r3 如果机械臂一直无所事事，在最大步数还不能接触到物体，也需要给一定的惩罚
-        if self.step_counter > self.max_steps_one_episode:
-            r += -20
+
+        if self.step_counter >= self.max_steps_one_episode:
+            r += -1000
             self.terminated = True
             self.is_success = False
-        elif self.distance_new < opt.reach_dis:
-            r += 10
+        if self.distance_new <= opt.reach_dis:
+            r += 1000
             self.terminated = True
             self.is_success = True
 
@@ -313,18 +328,17 @@ class RLReachEnv(object):
         x = self.robot_grip_pos[0]
         y = self.robot_grip_pos[1]
         z = self.robot_grip_pos[2]
-        terminated = bool(x < self.x_low_obs or x > self.x_high_obs
+        border = bool(x < self.x_low_obs or x > self.x_high_obs
                           or y < self.y_low_obs or y > self.y_high_obs
                           or z < self.z_low_obs or z > self.z_high_obs)
-        if terminated:
+        if border:
             r += -0.05
             # self.terminated = True
             # self.is_success = False
 
         self.distance_old = self.distance_new
-        self.step_counter += 1
 
-        # 在代码开始部分，如果定义了is_good_view，那么机械臂的动作会变慢，方便观察
+        # 在代码开始部分，如果定义了is_good_view，那么机械臂的动作会变慢
         if self.is_good_view:
             time.sleep(0.05)
 
@@ -344,6 +358,7 @@ class RLReachEnv(object):
 
         # 获取当前机械臂末端坐标
         self.robot_grip_pos = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
+        # 注意此处限定了机械臂的运动范围！！！但是在机械臂7自由度控制中没有
         # 计算下一步的机械臂末端坐标
         self.robot_grip_pos = [
             self.clip_val(self.robot_grip_pos[0] + dx, limit_x), self.clip_val(self.robot_grip_pos[1] + dy, limit_y),
@@ -395,6 +410,7 @@ class RLReachEnv(object):
             r -= 0.5
 
         # r3 如果机械臂一直无所事事，在最大步数还不能接触到物体，也需要给一定的惩罚
+        # r += 1*(0.5-self.step_counter/self.max_steps_one_episode)
         if self.step_counter > self.max_steps_one_episode:
             r += -20
             self.terminated = True
@@ -408,21 +424,16 @@ class RLReachEnv(object):
         x = self.robot_grip_pos[0]
         y = self.robot_grip_pos[1]
         z = self.robot_grip_pos[2]
-        self.terminated = bool(x < self.x_low_obs or x > self.x_high_obs
+        terminated = bool(x < self.x_low_obs or x > self.x_high_obs
                           or y < self.y_low_obs or y > self.y_high_obs
                           or z < self.z_low_obs or z > self.z_high_obs)
-        # if terminated:
-        #     r += -50
+        if terminated:
+            r += -0.05
         #     self.terminated = True
         #     self.is_success = False
 
-        # info = {'distance:', self.distance_new}
-
         self.distance_old = self.distance_new
 
-        # goal = [random.uniform(self.x_low_obs,self.x_high_obs),
-        #         random.uniform(self.y_low_obs,self.y_high_obs),
-        #         random.uniform(self.z_low_obs, self.z_high_obs)]
         return np.hstack((np.array(self.robot_grip_pos).astype(np.float32), self.object_pos)), \
             r, self.terminated, self.is_success
 
@@ -440,9 +451,9 @@ class RLReachEnv(object):
         numJoints = 7  # p.getNumJoints(self.kuka_id)
         for i in range(numJoints):
             info = p.getJointInfo(self.kuka_id, i)
-            # 计算新的角度
+            # 获取并计算新的角度
             current_joint[i] = p.getJointState(self.kuka_id, i)[0]
-            # action[i] = action[i] * opt.reach_ctr
+            action[i] = action[i] * opt.reach_ctr
             # action[i] = action[i] * np.pi / 180
             action[i] = self.clip_val(action[i], action_bound)
             self.robot_joint_pos[i] = self.clip_val(current_joint[i] + action[i], [info[8], info[9]])
@@ -455,9 +466,6 @@ class RLReachEnv(object):
                 targetValue=self.robot_joint_pos[i],
             )
         p.stepSimulation()
-
-        # 获取当前机械臂末端坐标
-        self.robot_grip_pos = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
 
         # # 限制当前机械臂末端坐标
         # self.new_grip_pos = [
@@ -481,7 +489,56 @@ class RLReachEnv(object):
         #             targetValue=self.robot_joint_positions[i],
         #         )
         #     p.stepSimulation()
-        return self.reward()
+
+        """根据state计算当前的reward"""
+        # 获取机械臂当前的末端坐标
+        # 一定注意是取第4个值，请参考pybullet手册的这个函数返回值的说明
+        self.robot_grip_pos = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
+        # self.object_state=p.getBasePositionAndOrientation(self.object_id)
+        # self.object_state=np.array(self.object_state).astype(np.float32)
+
+        # 获取物体当前的位置坐标
+        self.object_pos = np.array(
+            p.getBasePositionAndOrientation(self.object_id)[0]).astype(
+                np.float32)
+
+        # r1 用机械臂末端和物体的距离作为奖励函数的依据
+        self.distance_new = np.linalg.norm((self.robot_grip_pos - self.object_pos) / self.dist_norm, axis=-1)
+        r = -self.distance_new
+
+        # r2 如果运动趋势正确，提高奖励
+        if self.distance_new < self.distance_old:
+            r += 0.5
+        elif self.distance_new > self.distance_old:
+            r -= 0.5
+
+        # r3 如果机械臂一直无所事事，在最大步数还不能接触到物体，也需要给一定的惩罚
+        # r += 1*(0.5-self.step_counter/self.max_steps_one_episode)
+        if self.step_counter > self.max_steps_one_episode:
+            r += -20
+            self.terminated = True
+            self.is_success = False
+        elif self.distance_new < opt.reach_dis:
+            r += 10
+            self.terminated = True
+            self.is_success = True
+
+        # r4 如果机械比末端超过了obs的空间，也视为done，给予一定的惩罚
+        x = self.robot_grip_pos[0]
+        y = self.robot_grip_pos[1]
+        z = self.robot_grip_pos[2]
+        terminated = bool(x < self.x_low_obs or x > self.x_high_obs
+                          or y < self.y_low_obs or y > self.y_high_obs
+                          or z < self.z_low_obs or z > self.z_high_obs)
+        if terminated:
+            r += -0.05
+        #     self.terminated = True
+        #     self.is_success = False
+
+        self.distance_old = self.distance_new
+
+        return np.concatenate((self.robot_grip_pos, self.robot_joint_pos, self.object_pos)), \
+            r, self.terminated, self.is_success
 
     def close(self):
         p.disconnect()

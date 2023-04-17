@@ -32,7 +32,7 @@ class ReplayMemory(object):
 
     def opt_sample(self, size):  # 未完成
         # off-line
-        x = bubble_sort(self.memory)  # 对于预测不好的记忆给以大的优先级
+        x = bubble_sort(self.memory)  # 对于好的记忆给以大的优先级
         x = x[:size]
 
         # on-line

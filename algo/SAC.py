@@ -122,6 +122,7 @@ class SACAgent(object):
 
         for _ in range(gradient_steps):
             samples = self.replay_buffer.on_sample(self.batch_size)
+            # samples = self.replay_buffer.sample(self.batch_size)
             batch = Transition(*zip(*samples))
 
             state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)  # 先转化为np.array以加速
@@ -180,6 +181,10 @@ class SACAgent(object):
         torch.save(self.policy_net.state_dict(), 'dataBase/saveNet/' + str(num) + '_SAC_policy_net.pkl')
         torch.save(self.value_net.state_dict(), 'dataBase/saveNet/' + str(num) + '_SAC_value_net.pkl')
         torch.save(self.Q_net.state_dict(), 'dataBase/saveNet/' + str(num) + '_SAC_Q_net.pkl')
+
+        torch.save(self.policy_net.state_dict(), 'dataBase/loadNet/' + str(num) + '_SAC_policy_net.pkl')
+        torch.save(self.value_net.state_dict(), 'dataBase/loadNet/' + str(num) + '_SAC_value_net.pkl')
+        torch.save(self.Q_net.state_dict(), 'dataBase/loadNet/' + str(num) + '_SAC_Q_net.pkl')
 
     def load_net(self, num):
         self.policy_net.load_state_dict(torch.load('dataBase/loadNet/' + str(num) + '_SAC_policy_net.pkl'))
