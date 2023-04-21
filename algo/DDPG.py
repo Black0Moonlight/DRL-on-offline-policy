@@ -2,13 +2,9 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import numpy as np
-from collections import namedtuple
-
-from utils.ReplayMemory import ReplayMemory
+from utils.ReplayMemory import *
 from config import opt
 
-Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
 
 device = opt.device
 gamma = opt.gamma
@@ -58,11 +54,9 @@ class Critic(nn.Module):
 
 
 class DDPGAgent(object):
-    def __init__(self, state_dim, action_dim, hidden_dim=256,
-                 batch_size=256, action_bound=1, buffer_size=opt.buffer_size):
+    def __init__(self, state_dim, action_dim, hidden_dim=256, action_bound=1):
         self.state_dim = state_dim
         self.action_dim = action_dim
-        self.batch_size = batch_size
 
         if torch.cuda.is_available():
             print('/*********************** Found Cuda {} ***********************/'.format(torch.version.cuda))
@@ -78,11 +72,12 @@ class DDPGAgent(object):
 
         self.actor_target.load_state_dict(self.actor.state_dict())
         self.critic_target.load_state_dict(self.critic.state_dict())
-        self.replay_buffer = ReplayMemory(buffer_size, Transition)
+
+        # self.replay_buffer = ReplayMemory(buffer_size, Transition)
         # self.buffer = ReplayBuffer(action_space,observation_space)
 
     def put(self, s0, a0, r1, s1, d):
-        self.replay_buffer.push(s0, a0, r1, s1, d)
+        replay_buffer.push(s0, a0, r1, s1, d)
 
     def select_action(self, state):
         state = torch.Tensor(state).to(device)
@@ -92,10 +87,10 @@ class DDPGAgent(object):
         a = self.actor(state).cpu().detach().numpy()  # + noise
         return a
 
-    def update(self):
+    def update(self, batch):
         # samples = self.replay_buffer.on_sample(self.batch_size)
-        samples = self.replay_buffer.sample(self.batch_size)
-        batch = Transition(*zip(*samples))
+        # samples = replay_buffer.sample(self.batch_size)
+        # batch = Transition(*zip(*samples))
 
         state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)
         action_batch = torch.Tensor(np.array(batch.action)).view(-1, self.action_dim).to(device)

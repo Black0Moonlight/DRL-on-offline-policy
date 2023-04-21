@@ -121,8 +121,8 @@ class SACAgent(object):
             return
 
         for _ in range(gradient_steps):
-            samples = self.replay_buffer.on_sample(self.batch_size)
-            # samples = self.replay_buffer.sample(self.batch_size)
+            # samples = self.replay_buffer.on_sample(self.batch_size)
+            samples = self.replay_buffer.sample(self.batch_size)
             batch = Transition(*zip(*samples))
 
             state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)  # 先转化为np.array以加速
