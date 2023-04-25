@@ -62,19 +62,16 @@ class PrioritizedReplayBuffer:
         self.weights.append((self.buffer_size * priority) ** (-self.beta))
 
     def sample(self, batch_size):
-        # Calculate the sampling probabilities based on priorities and weights
         priorities = np.array(self.priorities)
         probs = priorities / priorities.sum()
         weights = np.array(self.weights)
         probs /= weights.sum()
         probs /= probs.sum()
 
-        # Sample a batch of experiences using the probabilities
         indices = np.random.choice(len(self.memory), batch_size, p=probs)
         batch = [self.memory[i] for i in indices]
         # weights = torch.tensor(weights[indices], dtype=torch.float32)
 
-        # Calculate the importance-sampling correction
         # is_weights = ((self.buffer_size * probs[indices]) ** (-self.beta)) / weights
         # is_weights /= is_weights.max()
 
@@ -83,14 +80,12 @@ class PrioritizedReplayBuffer:
         return batch
 
     def on_sample(self, batch_size):
-        # Calculate the sampling probabilities based on priorities and weights
         priorities = np.array(self.priorities)
         probs = priorities / priorities.sum()
         weights = np.array(self.weights)
         probs /= weights.sum()
         probs /= probs.sum()
 
-        # Sample a batch of experiences using the probabilities
         indices = np.random.choice(len(self.memory), batch_size, p=probs)
         batch = [self.memory[i] for i in indices]
 

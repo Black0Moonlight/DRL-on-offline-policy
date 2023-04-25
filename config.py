@@ -18,9 +18,9 @@ csv_path = 'dataAnalyse/' + str(0) + '.csv'
 
 class DefaultConfig(object):
     # global parameter
-    env = 'RLReachEnv'
-    vis_name = 'Reach_DADDPG'  # visdom env
-    vis_port = 8097      # visdom port
+    # env = 'RLReachEnv'
+    # vis_name = 'Reach_DADDPG'  # visdom env
+    # vis_port = 8097      # visdom port
 
     # reach env parameter
     reach_ctr = 0.01     # to control the robot arm moving rate every step

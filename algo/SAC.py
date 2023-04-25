@@ -3,10 +3,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
 from torch.distributions import Normal
-import numpy as np
-from collections import namedtuple
 
-from utils.ReplayMemory import ReplayMemory
+from utils.ReplayMemory import *
 from config import opt
 
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
@@ -91,7 +89,7 @@ class SACAgent(object):
 
         self.num_transition = 0  # pointer of replay buffer
         self.num_training = 1
-        self.replay_buffer = ReplayMemory(buffer_size, Transition)
+        # self.replay_buffer = ReplayMemory(buffer_size, Transition)
 
     def select_action(self, state):
         state = torch.Tensor(state).to(device)
@@ -102,8 +100,8 @@ class SACAgent(object):
         a = torch.tanh(z).detach().cpu().numpy()
         return a
 
-    def put(self, s0, a0, r1, s1, d):
-        self.replay_buffer.push(s0, a0, r1, s1, d)
+    # def put(self, s0, a0, r1, s1, d):
+    #     self.replay_buffer.push(s0, a0, r1, s1, d)
 
     def get_action_log_prob(self, state):
         batch_mu, batch_log_sigma = self.policy_net(state)
@@ -117,13 +115,11 @@ class SACAgent(object):
         return action, log_prob, z, batch_mu, batch_log_sigma
 
     def update(self):
-        if self.replay_buffer.__len__() < self.batch_size:  # 记录第一批batch
+        if replay_buffer.__len__() < self.batch_size:  # 记录第一批batch
             return
 
         for _ in range(gradient_steps):
-            # samples = self.replay_buffer.on_sample(self.batch_size)
-            samples = self.replay_buffer.sample(self.batch_size)
-            batch = Transition(*zip(*samples))
+            batch = replay_buffer.sample(self.batch_size)
 
             state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)  # 先转化为np.array以加速
             action_batch = torch.Tensor(np.array(batch.action)).view(-1, self.action_dim).to(device)
@@ -132,7 +128,7 @@ class SACAgent(object):
             done_batch = torch.Tensor(batch.done).view(-1, 1).to(device)
 
             target_value = self.Target_value_net(next_state_batch)
-            next_q_value = reward_batch + (1 - done_batch) * gamma * target_value
+            next_q_value = reward_batch + done_batch * gamma * target_value
 
             excepted_value = self.value_net(state_batch)
             excepted_Q = self.Q_net(state_batch, action_batch)
