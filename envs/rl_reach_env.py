@@ -102,9 +102,14 @@ class RLReachEnv(object):
         ]
 
         # 初始关节角度
+        # self.init_joint_positions = [
+        #     0.006418, 0.413184, -0.011401, -1.589317, 0.005379, 1.137684,
+        #     -0.006539
+        # ]
+
         self.init_joint_positions = [
-            0.006418, 0.413184, -0.011401, -1.589317, 0.005379, 1.137684,
-            -0.006539
+            0.0, 0.0, -0.0, -0.0, 0.0, 0,
+            -0
         ]
 
         self.orientation = p.getQuaternionFromEuler(
@@ -207,13 +212,14 @@ class RLReachEnv(object):
         self.deadlock = 0
 
         # 载入物体
-        self.object_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
-        self.object_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
-        self.object_pos[2] = random.uniform(self.z_low_obs, self.z_high_obs)
-        # self.obj_pos[0] = (self.x_low_obs+self.x_high_obs) / 2
-        # self.obj_pos[1] = (self.y_low_obs+self.y_high_obs) / 2
-        # self.obj_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
+        # self.object_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
+        # self.object_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
+        # self.object_pos[2] = random.uniform(self.z_low_obs, self.z_high_obs)
+        self.object_pos[0] = (self.x_low_obs+self.x_high_obs) / 2
+        self.object_pos[1] = (self.y_low_obs+self.y_high_obs) / 2
+        self.object_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
         ang = 3.14 * 0.5 + 3.1415925438 * random.random()
+        ang = 0
         orn = p.getQuaternionFromEuler([0, 0, ang])
         p.stepSimulation()
         p.resetBasePositionAndOrientation(self.object_id, self.object_pos, orn)
@@ -243,62 +249,6 @@ class RLReachEnv(object):
         if value > limit[1]:
             return limit[1]
         return value
-
-    def reward(self):
-        """根据state计算当前的reward"""
-        # 获取机械臂当前的末端坐标
-        # 一定注意是取第4个值，请参考pybullet手册的这个函数返回值的说明
-        self.robot_grip_pos = p.getLinkState(self.kuka_id, self.num_joints - 1)[4]
-        # self.object_state=p.getBasePositionAndOrientation(self.object_id)
-        # self.object_state=np.array(self.object_state).astype(np.float32)
-
-        # 获取物体当前的位置坐标
-        self.object_pos = np.array(
-            p.getBasePositionAndOrientation(self.object_id)[0]).astype(
-                np.float32)
-
-        # r1 用机械臂末端和物体的距离作为奖励函数的依据
-        self.distance_new = np.linalg.norm((self.robot_grip_pos - self.object_pos) / self.dist_norm, axis=-1)
-        r = -self.distance_new
-
-        # r2 如果运动趋势正确，提高奖励
-        if self.distance_new < self.distance_old:
-            r += 0.5
-        elif self.distance_new > self.distance_old:
-            r -= 0.5
-
-        self.step_counter += 1
-        # r3 如果机械臂一直无所事事，在最大步数还不能接触到物体，也需要给一定的惩罚
-
-        if self.step_counter >= self.max_steps_one_episode:
-            r += -1000
-            self.terminated = True
-            self.is_success = False
-        if self.distance_new <= opt.reach_dis:
-            r += 1000
-            self.terminated = True
-            self.is_success = True
-
-        # r4 如果机械比末端超过了obs的空间，也视为done，给予一定的惩罚
-        x = self.robot_grip_pos[0]
-        y = self.robot_grip_pos[1]
-        z = self.robot_grip_pos[2]
-        border = bool(x < self.x_low_obs or x > self.x_high_obs
-                          or y < self.y_low_obs or y > self.y_high_obs
-                          or z < self.z_low_obs or z > self.z_high_obs)
-        if border:
-            r += -0.05
-            # self.terminated = True
-            # self.is_success = False
-
-        self.distance_old = self.distance_new
-
-        # 在代码开始部分，如果定义了is_good_view，那么机械臂的动作会变慢
-        if self.is_good_view:
-            time.sleep(0.05)
-
-        return np.concatenate((self.robot_grip_pos, self.robot_joint_pos, self.object_pos)),\
-            r, self.terminated, self.is_success
 
     def step_xyz(self, action):
         """限定机械臂末端全局运动范围"""

@@ -7,6 +7,7 @@ Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state'
 
 
 class ReplayMemory(object):
+    # 这是经典的单记忆库方法，能够添加一条在线策略
     def __init__(self, buffer_size):
         self.buffer_size = buffer_size
         self.memory = []
@@ -39,7 +40,64 @@ class ReplayMemory(object):
         return len(self.memory)
 
 
+class ReplayMemory1(object):
+    # 这是改进的双记忆库方法
+    def __init__(self, buffer_size):
+        self.buffer_size = buffer_size
+        self.on_buffer_size = 2  # 每X步进行一次软更新
+        self.memory = []
+        self.on_memory = []
+        self.position = 0
+        self.on_position = 0
+        self.update = 0
+        self.sample = []
+
+    def push(self, *args):
+        if len(self.memory) <= 16:
+            self.memory.append(None)
+            self.memory[self.position] = Transition(*args)
+            self.position += 1
+        else:
+            if len(self.on_memory) < self.on_buffer_size:
+                self.on_memory.append(None)
+            self.on_memory[self.on_position] = Transition(*args)
+            self.on_position += 1
+            if self.on_position >= self.on_buffer_size:
+                # 开始软更新
+                self.on_position = 0
+                self.update = 1
+                return 1
+            else:
+                self.update = 0
+                return 0
+
+    def push_memory(self):
+        # 将上一次策略的经验存入离线策略
+        for i in range(self.on_buffer_size):
+            if len(self.memory) < self.buffer_size:
+                self.memory.append(None)
+            self.memory[self.position] = self.on_memory[i]
+            self.position = (self.position + 1) % self.buffer_size  # 替换老元素
+
+    def on_sample(self, size):
+        # off-line
+        self.sample = random.sample(self.memory, size-self.on_buffer_size)
+
+        # on-line
+        for i in range(self.on_buffer_size):
+            self.sample.append(None)
+            self.sample[len(self.sample)-1] = self.on_memory[i]
+
+        batch = Transition(*zip(*self.sample))
+        self.push_memory()
+        return batch
+
+    def __len__(self):
+        return len(self.memory)
+
+
 class PrioritizedReplayBuffer:
+    # 优先经验回放方法
     def __init__(self, buffer_size, alpha=0.6, beta=0.4, epsilon=1e-6):
         self.buffer_size = buffer_size
         self.alpha = alpha  # controls the amount of prioritization
@@ -114,5 +172,6 @@ def bubble_sort(x):
     return sort_list
 
 
-# replay_buffer = ReplayMemory(opt.buffer_size)
-replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)
+replay_buffer = ReplayMemory(opt.buffer_size)
+# replay_buffer = ReplayMemory1(opt.buffer_size)
+# replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)

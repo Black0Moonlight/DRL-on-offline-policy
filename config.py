@@ -31,7 +31,7 @@ class DefaultConfig(object):
     use_gpu = True       # user GPU or not
     device = torch.device('cuda') if use_gpu else torch.device('cpu')
     random_seed = 0
-    max_episodes = 50000   # number of training episodes
+    max_episodes = 2000   # number of training episodes
     max_episodes_xyz = 200
     max_steps_one_episode = 500  # Maximum number of simulation steps per round
     max_steps_pick = 1000  # Maximum number of simulation steps per round

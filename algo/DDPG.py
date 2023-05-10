@@ -132,6 +132,51 @@ class DDPGAgent(object):
         soft_update(self.critic_target, self.critic)
 
         return critic_loss.cpu().detach().numpy()
+    def update(self, batch):
+        # samples = self.replay_buffer.on_sample(self.batch_size)
+        # samples = replay_buffer.sample(self.batch_size)
+        # batch = Transition(*zip(*samples))
+
+        state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)
+        action_batch = torch.Tensor(np.array(batch.action)).view(-1, self.action_dim).to(device)
+        reward_batch = torch.Tensor(batch.reward).view(-1, 1).to(device)
+        next_state_batch = torch.Tensor(np.array(batch.next_state)).view(-1, self.state_dim).to(device)
+        done_batch = torch.Tensor(batch.done).view(-1, 1).to(device)
+
+        # state_batch, action_batch, reward_batch, next_state_batch, done_batch = self.buffer.sample()
+        # state_batch = torch.Tensor(state_batch).view(-1, observation_space).to(opt.device)  # 先转化为np.array以加速
+        # action_batch = torch.Tensor(np.array(action_batch)).view(-1, action_space).to(opt.device)
+        # reward_batch = torch.Tensor(reward_batch).view(-1, 1).to(opt.device)
+        # next_state_batch = torch.Tensor(np.array(next_state_batch)).view(-1, observation_space).to(opt.device)
+        # done_batch = torch.Tensor(done_batch).view(-1, 1).to(opt.device)
+
+        # critic更新
+        next_action_batch = self.actor_target(next_state_batch).detach().view(-1, self.action_dim).to(device)
+        current_Q = self.critic(state_batch, action_batch).to(device)
+        target_Q = self.critic_target(next_state_batch, next_action_batch).to(device)
+        target_Q = reward_batch + (done_batch * gamma * target_Q)
+
+        # Optimize the critic
+        critic_loss = torch.mean(F.mse_loss(current_Q, target_Q))
+        self.critic_optim.zero_grad()  # 清零梯度
+        critic_loss.backward()
+        self.critic_optim.step()  # 更新梯度
+
+        # Optimize the actor
+        actor_loss = -torch.mean(self.critic(state_batch, self.actor(state_batch)))
+        self.actor_optim.zero_grad()
+        actor_loss.backward()
+        self.actor_optim.step()
+
+        # soft update
+        def soft_update(net_target, net):
+            for target_param, param in zip(net_target.parameters(), net.parameters()):
+                target_param.data.copy_(target_param.data * (1.0 - opt.tau) + param.data * opt.tau)
+
+        soft_update(self.actor_target, self.actor)
+        soft_update(self.critic_target, self.critic)
+
+        return critic_loss.cpu().detach().numpy()
 
     def save(self, num):
         torch.save(self.actor.state_dict(), 'dataBase/saveNet/' + str(num) + '_actor_net.pkl')
