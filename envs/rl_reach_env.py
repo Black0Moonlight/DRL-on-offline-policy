@@ -212,14 +212,14 @@ class RLReachEnv(object):
         self.deadlock = 0
 
         # 载入物体
-        # self.object_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
-        # self.object_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
-        # self.object_pos[2] = random.uniform(self.z_low_obs, self.z_high_obs)
-        self.object_pos[0] = (self.x_low_obs+self.x_high_obs) / 2
-        self.object_pos[1] = (self.y_low_obs+self.y_high_obs) / 2
-        self.object_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
+        self.object_pos[0] = random.uniform(self.x_low_obs, self.x_high_obs)
+        self.object_pos[1] = random.uniform(self.y_low_obs, self.y_high_obs)
+        self.object_pos[2] = random.uniform(self.z_low_obs, self.z_high_obs)
+        # self.object_pos[0] = (self.x_low_obs+self.x_high_obs) / 2
+        # self.object_pos[1] = (self.y_low_obs+self.y_high_obs) / 2
+        # self.object_pos[2] = (self.z_low_obs + self.z_high_obs) / 2
         ang = 3.14 * 0.5 + 3.1415925438 * random.random()
-        ang = 0
+        # ang = 0
         orn = p.getQuaternionFromEuler([0, 0, ang])
         p.stepSimulation()
         p.resetBasePositionAndOrientation(self.object_id, self.object_pos, orn)

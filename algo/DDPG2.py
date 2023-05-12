@@ -116,7 +116,6 @@ class DDPGAgent2(object):
             for target_param, param in zip(net_target.parameters(), net.parameters()):
                 target_param.data.copy_(target_param.data * (1.0 - opt.tau) + param.data * opt.tau)
 
-
         soft_update(self.actor_target, self.actor)
         soft_update(self.critic_target, self.critic)
 

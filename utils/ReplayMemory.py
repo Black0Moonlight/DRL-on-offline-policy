@@ -41,27 +41,29 @@ class ReplayMemory(object):
 
 
 class ReplayMemory1(object):
-    # 这是改进的双记忆库方法
+    # 改进的双记忆库方法，可以添加一条以上的在线策略
     def __init__(self, buffer_size):
         self.buffer_size = buffer_size
-        self.on_buffer_size = 2  # 每X步进行一次软更新
-        self.memory = []
+        self.on_buffer_size = 3  # 设定在线策略经验大小
+        self.off_memory = []
         self.on_memory = []
-        self.position = 0
+        self.off_position = 0
         self.on_position = 0
         self.update = 0
         self.sample = []
+        self.newest_push = 0
 
     def push(self, *args):
-        if len(self.memory) <= 16:
-            self.memory.append(None)
-            self.memory[self.position] = Transition(*args)
-            self.position += 1
+        # 在第一次初始化时，将离线策略记忆库填充至 16-on_buffer_size
+        if len(self.off_memory) <= 16 - self.on_buffer_size:
+            self.off_memory.append(None)
+            self.off_memory[self.off_position] = Transition(*args)
+            self.off_position += 1
         else:
             if len(self.on_memory) < self.on_buffer_size:
                 self.on_memory.append(None)
-            self.on_memory[self.on_position] = Transition(*args)
-            self.on_position += 1
+                self.on_memory[self.on_position] = Transition(*args)
+                self.on_position += 1
             if self.on_position >= self.on_buffer_size:
                 # 开始软更新
                 self.on_position = 0
@@ -74,83 +76,111 @@ class ReplayMemory1(object):
     def push_memory(self):
         # 将上一次策略的经验存入离线策略
         for i in range(self.on_buffer_size):
-            if len(self.memory) < self.buffer_size:
-                self.memory.append(None)
-            self.memory[self.position] = self.on_memory[i]
-            self.position = (self.position + 1) % self.buffer_size  # 替换老元素
+            if len(self.off_memory) < self.buffer_size:
+                self.off_memory.append(None)
+            self.off_memory[self.off_position] = self.on_memory[i]
+            # 先入先出规则，替换老元素
+            self.off_position = (self.off_position + 1) % self.buffer_size
 
     def on_sample(self, size):
-        # off-line
-        self.sample = random.sample(self.memory, size-self.on_buffer_size)
+        # 随机采样离线策略经验
+        self.sample = random.sample(self.off_memory, size-self.on_buffer_size)
 
-        # on-line
+        # 添加在线策略经验
         for i in range(self.on_buffer_size):
             self.sample.append(None)
             self.sample[len(self.sample)-1] = self.on_memory[i]
 
         batch = Transition(*zip(*self.sample))
+
+        # 更新离线策略经验记忆库
         self.push_memory()
+
         return batch
 
     def __len__(self):
-        return len(self.memory)
+        return len(self.off_memory)+len(self.on_memory)
 
 
 class PrioritizedReplayBuffer:
     # 优先经验回放方法
-    def __init__(self, buffer_size, alpha=0.6, beta=0.4, epsilon=1e-6):
+    def __init__(self, buffer_size, on_batch_size=3, batch_size=16, alpha=0.6, beta=0.4, epsilon=1e-6):
         self.buffer_size = buffer_size
+        self.batch_size = batch_size
+        self.on_batch_size = on_batch_size  # 设定在线策略经验大小
+
         self.alpha = alpha  # controls the amount of prioritization
         self.beta = beta  # controls the amount of importance-sampling correction
         self.epsilon = epsilon  # a small constant to ensure non-zero priorities
+        self.priorities = []
+        self.weights = []
 
-        self.memory = deque(maxlen=buffer_size)
-        self.priorities = deque(maxlen=buffer_size)
-        self.weights = deque(maxlen=buffer_size)
+        self.off_memory = []
+        self.on_memory = []
+        self.off_position = 0
+        self.on_position = 0
+        self.update = 0
+        self.sample = []
         self.newest_push = 0
 
-    def push(self, state, action, reward, next_state, done):
-        experience = Transition(state, action, reward, next_state, done)
-        self.newest_push = experience
+    def push(self, *args):
+        self.newest_push = Transition(*args)
+        # 在第一次初始化时，将离线策略记忆库填充至 batch_size-on_buffer_size
+        if len(self.off_memory) < self.batch_size - self.on_batch_size:
+            self.off_memory.append(None)
+            self.off_memory[self.off_position] = self.newest_push
+            self.off_position += 1
+        else:
+            if len(self.on_memory) < self.on_batch_size:
+                self.on_memory.append(None)
+                self.on_memory[self.on_position] = self.newest_push
+                self.on_position += 1
+            if self.on_position >= self.on_batch_size:
+                # 开始软更新
+                self.on_position = 0
+                self.update = 1
+                return 1
+            else:
+                self.update = 0
+                return 0
 
-        # Calculate the priority for this experience
-        priority = (abs(reward) + self.epsilon) ** self.alpha
-        self.memory.append(experience)
-        self.priorities.append(priority)
-        self.weights.append((self.buffer_size * priority) ** (-self.beta))
+    def push_memory(self):
+        # 将上一次策略的经验存入离线策略
+        for i in range(self.on_batch_size):
+            if len(self.off_memory) < self.buffer_size:
+                self.off_memory.append(None)
+            self.off_memory[self.off_position] = self.on_memory[i]
 
-    def sample(self, batch_size):
-        priorities = np.array(self.priorities)
-        probs = priorities / priorities.sum()
-        weights = np.array(self.weights)
-        probs /= weights.sum()
-        probs /= probs.sum()
+            priority = (abs(self.off_memory[self.off_position].reward) + self.epsilon) ** self.alpha
+            self.priorities.append(priority)
+            self.weights.append((self.buffer_size * priority) ** (-self.beta))
 
-        indices = np.random.choice(len(self.memory), batch_size, p=probs)
-        batch = [self.memory[i] for i in indices]
-        # weights = torch.tensor(weights[indices], dtype=torch.float32)
-
-        # is_weights = ((self.buffer_size * probs[indices]) ** (-self.beta)) / weights
-        # is_weights /= is_weights.max()
-
-        batch = Transition(*zip(*batch))
-
-        return batch
+            self.off_position = (self.off_position + 1) % self.buffer_size  # 替换老元素
 
     def on_sample(self, batch_size):
+        if self.__len__() < batch_size:
+            return None
+
         priorities = np.array(self.priorities)
-        probs = priorities / priorities.sum()
+        probs = priorities / priorities.sum()  # 归一化
         weights = np.array(self.weights)
-        probs /= weights.sum()
-        probs /= probs.sum()
+        weights /= weights.sum()
 
-        indices = np.random.choice(len(self.memory), batch_size, p=probs)
-        batch = [self.memory[i] for i in indices]
+        # 优先经验方法采样离线策略经验
+        indices = np.random.choice(len(self.off_memory), self.batch_size - self.on_batch_size, p=probs)
+        self.sample = [self.off_memory[i] for i in indices]
 
-        batch[0] = self.newest_push
+        # 添加在线策略经验
+        for i in range(self.on_batch_size):
+            self.sample.append(None)
+            self.sample[len(self.sample)-1] = self.on_memory[i]
 
-        batch = Transition(*zip(*batch))
-        return batch
+        is_weights = ((self.buffer_size * probs[indices]) ** (-self.beta)) / weights[indices]
+        is_weights /= is_weights.max()
+
+        batch = Transition(*zip(*self.sample))
+
+        return indices, batch, is_weights
 
     def update_priorities(self, indices, td_errors):
         for i, td_error in zip(indices, td_errors):
@@ -159,7 +189,7 @@ class PrioritizedReplayBuffer:
             self.weights[i] = (self.buffer_size * priority) ** (-self.beta)
 
     def __len__(self):
-        return len(self.memory)
+        return len(self.off_memory)+len(self.on_memory)
 
 
 def bubble_sort(x):
@@ -172,6 +202,6 @@ def bubble_sort(x):
     return sort_list
 
 
-replay_buffer = ReplayMemory(opt.buffer_size)
+# replay_buffer = ReplayMemory(opt.buffer_size)
 # replay_buffer = ReplayMemory1(opt.buffer_size)
 # replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)

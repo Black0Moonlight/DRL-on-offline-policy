@@ -44,7 +44,7 @@ class Critic(nn.Module):
         return x
 
 
-class DDPGAgent2(object):
+class DDPGAgent3(object):
     def __init__(self, state_dim, action_dim, hidden_dim=256, action_bound=1):
         self.state_dim = state_dim
         self.action_dim = action_dim
@@ -75,7 +75,7 @@ class DDPGAgent2(object):
         a = self.actor(state).cpu().detach().numpy()  # + noise
         return a
 
-    def update(self, batch):
+    def update(self, indices, batch, is_weights):
         state_batch = torch.Tensor(np.array(batch.state)).view(-1, self.state_dim).to(device)
         action_batch = torch.Tensor(np.array(batch.action)).view(-1, self.action_dim).to(device)
         reward_batch = torch.Tensor(batch.reward).view(-1, 1).to(device)
@@ -100,7 +100,7 @@ class DDPGAgent2(object):
         actor_loss.backward()
         self.actor_optim.step()
 
-        replay_buffer.update_priorities()
+        replay_buffer.update_priorities(indices, critic_loss)
 
         # soft update
         def soft_update(net_target, net):
@@ -128,10 +128,6 @@ class DDPGAgent2(object):
         self.critic.load_state_dict(torch.load('dataBase/loadNet/' + str(num) + '_critic_net.pkl'))
         self.actor_target.load_state_dict(torch.load('dataBase/loadNet/' + str(num) + '_actor_target_net.pkl'))
         self.critic_target.load_state_dict(torch.load('dataBase/loadNet/' + str(num) + '_critic_target_net.pkl'))
-        # self.actor.Linear2.weight.data.normal_(0, 0.1)
-        # self.critic.Linear2.weight.data.normal_(0, 0.1)
-        # self.actor_target.Linear2.weight.data.normal_(0, 0.1)
-        # self.critic_target.Linear2.weight.data.normal_(0, 0.1)
 
     def change_batch_size(self, size):
         self.batch_size = size
