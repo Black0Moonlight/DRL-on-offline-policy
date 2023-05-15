@@ -437,7 +437,7 @@ class RLReachEnv(object):
             r += 10
             self.terminated = True
             self.is_success = True
-        elif self.firsttime and math.fabs(self.distance_new-self.distance_old) < 0.006:
+        elif self.firsttime and math.fabs(self.distance_new-self.distance_old) < 0.009:
             if not self.deadlock:
                 self.deadlock = 1
             if self.deadlock:

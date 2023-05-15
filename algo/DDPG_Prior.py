@@ -89,6 +89,7 @@ class DDPGAgent3(object):
         target_Q = reward_batch + (done_batch * gamma * target_Q)
 
         # Optimize the critic
+        td_error = target_Q-current_Q
         critic_loss = torch.mean(F.mse_loss(current_Q, target_Q))
         self.critic_optim.zero_grad()  # 清零梯度
         critic_loss.backward()
@@ -100,7 +101,7 @@ class DDPGAgent3(object):
         actor_loss.backward()
         self.actor_optim.step()
 
-        replay_buffer.update_priorities(indices, critic_loss)
+        replay_buffer.update_priorities(indices, td_error)
 
         # soft update
         def soft_update(net_target, net):

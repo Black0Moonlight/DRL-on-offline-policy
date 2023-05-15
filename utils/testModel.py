@@ -44,7 +44,7 @@ def testNet(net_num, state_dim, action_dim, net):
         else:
             s0 = env.reset_joint()
         done = is_success = 0
-        # time.sleep(0.3)
+        time.sleep(0.5)
         for j in range(opt.max_steps_one_episode):
             if done:
                 break
@@ -54,7 +54,7 @@ def testNet(net_num, state_dim, action_dim, net):
             else:
                 s1, r, done, is_success = env.step_joint(a0)
             s0 = s1
-            # time.sleep(0.1)
+            time.sleep(0.1)
         score += is_success
         # time.sleep(0.3)
     print('/***************** NO.{} network {:.1f}% ******************/'.format(net_num, score/2))
@@ -64,7 +64,7 @@ def testNet(net_num, state_dim, action_dim, net):
 def xyz_DDPG(state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train xyz **************************/")
     # 使用ReplayMemory，可以使用sample和一条在线策略的on sample
-    replay_buffer = ReplayMemory(opt.buffer_size)
+    # replay_buffer = ReplayMemory(opt.buffer_size)
     action_bound = 0.3 + float(env.action_space.high[0])
     Agent = DDPGAgent(state_dim, action_dim, action_bound=action_bound)
 
@@ -109,7 +109,7 @@ def train_xyz_SAC(state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train xyz **************************/")
     action_bound = 0.3 + float(env.action_space.high[0])
 
-    replay_buffer = ReplayMemory(opt.buffer_size)
+    # replay_buffer = ReplayMemory(opt.buffer_size)
     Agent = SACAgent(state_dim, action_dim, batch_size=batch_size, action_bound=action_bound)
 
     last_total_r = 0
@@ -156,7 +156,7 @@ def train_xyz_SAC(state_dim, action_dim, batch_size, action_bound=1):
 
 def xyz_DDPG_OnOff(state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train xyz **************************/")
-    replay_buffer = ReplayMemory1(opt.buffer_size)
+    # replay_buffer = ReplayMemory1(opt.buffer_size)
     action_bound = 0.3 + float(env.action_space.high[0])
     Agent = DDPGAgent(state_dim, action_dim, action_bound=action_bound)
 
@@ -177,6 +177,8 @@ def xyz_DDPG_OnOff(state_dim, action_dim, batch_size, action_bound=1):
             replay_buffer.push(s0, a0, r, s1, 1 - done)
             s0 = s1
             total_r += r
+            qw=replay_buffer.__len__()
+            b=replay_buffer.update
             if replay_buffer.__len__() > batch_size and replay_buffer.update:
                 loss = Agent.update(replay_buffer.on_sample(batch_size))
                 total_l += loss
@@ -200,7 +202,7 @@ def xyz_DDPG_OnOff(state_dim, action_dim, batch_size, action_bound=1):
 def xyz_DDPG_Prioritized\
                 (state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train xyz **************************/")
-    replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)
+    # replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)
     action_bound = 0.3 + float(env.action_space.high[0])
     Agent = DDPGAgent3(state_dim, action_dim, action_bound=action_bound)
 
@@ -221,7 +223,8 @@ def xyz_DDPG_Prioritized\
             replay_buffer.push(s0, a0, r, s1, 1 - done)
             s0 = s1
             total_r += r
-            if replay_buffer.__len__() > batch_size and replay_buffer.update:
+            # time.sleep(0.01)
+            if replay_buffer.__len__() >= batch_size and replay_buffer.update:
                 indices, batch, is_weights = replay_buffer.on_sample(batch_size)
                 loss = Agent.update(indices, batch, is_weights)
                 total_l += loss
@@ -236,10 +239,8 @@ def xyz_DDPG_Prioritized\
         if (episode+1) % 10 == 0:
             save_num += 1
             Agent.save(save_num)
-            net_num, d = testNet(save_num, state_dim, action_dim, "DDPG")
-            writer.add_scalar('Success_rate', d, save_num)
-            # net_num, d = testandtrainNet(save_num, state_dim, action_dim, "DDPG")
-            # writer.add_scalar('testand train', d, net_num)
+            # net_num, d = testNet(save_num, state_dim, action_dim, "DDPG")
+            # writer.add_scalar('Success_rate', d, save_num)
 
 
 '''###################################################
@@ -247,9 +248,10 @@ def xyz_DDPG_Prioritized\
 
 ###################################################'''
 
+
 def joint_DDPG(state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train joint ************************/")
-    replay_buffer = ReplayMemory(opt.buffer_size)
+    # replay_buffer = ReplayMemory(opt.buffer_size)
     Agent = DDPGAgent(state_dim, action_dim, action_bound=action_bound)
     last_total_r = 0
     save_num = 0
@@ -296,7 +298,7 @@ def joint_DDPG(state_dim, action_dim, batch_size, action_bound=1):
 def joint_DDPG_OnOff(state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train joint ************************/")
     # 使用ReplayMemory1
-    replay_buffer = ReplayMemory1(opt.buffer_size)
+    # replay_buffer = ReplayMemory1(opt.buffer_size)
     Agent = DDPGAgent(state_dim, action_dim, action_bound=action_bound)
     last_total_r = 0
     save_num = 0
@@ -337,7 +339,7 @@ def joint_DDPG_Prioritized\
                 (state_dim, action_dim, batch_size, action_bound=1):
     print("/************************* train joint ************************/")
     # 使用PrioritizedReplayBuffer
-    replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)
+    # replay_buffer = PrioritizedReplayBuffer(opt.buffer_size)
     Agent = DDPGAgent3(state_dim, action_dim, action_bound=action_bound)
     last_total_r = 0
     save_num = 0
@@ -356,7 +358,7 @@ def joint_DDPG_Prioritized\
             replay_buffer.push(s0, a0, r, s1, 1 - done)
             s0 = s1
             total_r += r
-            if replay_buffer.__len__() > batch_size and replay_buffer.update:
+            if replay_buffer.__len__() >= batch_size and replay_buffer.update:
                 indices, batch, is_weights = replay_buffer.on_sample(batch_size)
                 loss = Agent.update(indices, batch, is_weights)
                 total_l += loss
@@ -379,15 +381,16 @@ if __name__ == '__main__':
     clearLogs()
     writer = SummaryWriter(log_path)  # 展示部分数据
 
-    # testNet(1, 6, 3, "DDPG")
+    # testNet(24, 13, 7, "DDPG")
+    # testNet(20, 6, 3, "DDPG")
 
     # xyz_DDPG(state_dim=6, action_dim=3, batch_size=16)
     # xyz_DDPG_OnOff(state_dim=6, action_dim=3, batch_size=16)
-    # xyz_DDPG_Prioritized(state_dim=6, action_dim=3, batch_size=16)
+    xyz_DDPG_Prioritized(state_dim=6, action_dim=3, batch_size=16)
 
     # train_xyz_SAC(state_dim=6, action_dim=3, batch_size=16)
     #
     # joint_DDPG(state_dim=13, action_dim=7, batch_size=16)
-    joint_DDPG_OnOff(state_dim=13, action_dim=7, batch_size=16)
+    # joint_DDPG_OnOff(state_dim=13, action_dim=7, batch_size=16)
     # joint_DDPG_Prioritized(state_dim=13, action_dim=7, batch_size=16)
 
